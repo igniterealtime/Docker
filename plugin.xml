@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<plugin>
+    <author>igniterealtime.org</author>
+    <class>org.ifsoft.docker.openfire.PluginImpl</class>
+    <name>Docker</name>
+    <description>Docker Management</description>
+    <licenseType>Apache 2.0</licenseType>
+    <version>0.0.1</version>
+    <date>10/25/2018</date>
+    <minServerVersion>4.0.0</minServerVersion>
+
+   <adminconsole>
+        <tab id="tab-server">
+            <sidebar id="siderbar-docker" name="${plugin.title}" description="${plugin.title.description}" >
+                <item id="docker-settings" name="${config.page.settings}" description="${config.page.settings.description}" url="docker.jsp"/>
+                <item id="docker-webui" name="${config.page.webui}" description="${config.page.webui.description}" url="docker-webui.jsp"/>                                                
+            </sidebar>
+        </tab>
+    </adminconsole> 
+</plugin>
