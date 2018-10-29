@@ -48,7 +48,7 @@ import org.jivesoftware.openfire.XMPPServer;
         this.docserverUrl = JiveGlobals.getProperty("docker.docserver.url", "http://" + ipaddr + ":" + httpPort);
 
         proxyConnection.setSocket(this);
-        Log.info("setProxyConnection");
+        Log.debug("setProxyConnection");
     }
 
     public boolean isOpen() {
@@ -59,7 +59,7 @@ import org.jivesoftware.openfire.XMPPServer;
     {
         this.wsSession = wsSession;
         //proxyConnection.setSecure(wsSession.isSecure());
-        Log.info("onConnect");
+        Log.debug("onConnect");
     }
 
     @OnWebSocketClose public void onClose(int statusCode, String reason)
@@ -71,7 +71,7 @@ import org.jivesoftware.openfire.XMPPServer;
             Log.error( "An error occurred while attempting to remove the socket", e );
         }
 
-        Log.info(" : onClose : " + statusCode + " " + reason);
+        Log.debug(" : onClose : " + statusCode + " " + reason);
     }
 
     @OnWebSocketError public void onError(Throwable error)
@@ -84,7 +84,7 @@ import org.jivesoftware.openfire.XMPPServer;
         if ( !"".equals( data.trim()))
         {
             try {
-                Log.info(" : onMessage : Received : \n" + data );
+                Log.debug(" : onMessage : Received : \n" + data );
                 proxyConnection.deliver(data);
 
             } catch ( Exception e ) {
@@ -103,9 +103,9 @@ import org.jivesoftware.openfire.XMPPServer;
         if (wsSession != null && wsSession.isOpen() && !"".equals( message.trim() ) )
         {
             try {
-                message = message.replace("http://" + ipaddr + ":" + docserverPort, docserverUrl);
+                //message = message.replace("http://" + ipaddr + ":" + docserverPort, docserverUrl);
 
-                Log.info(" : Delivered : \n" + message );
+                Log.debug(" : Delivered : \n" + message );
                 wsSession.getRemote().sendStringByFuture(message);
             } catch (Exception e) {
                 Log.error("ProxyWebSocket deliver " + e);
@@ -116,7 +116,7 @@ import org.jivesoftware.openfire.XMPPServer;
 
     public void disconnect()
     {
-        Log.info("disconnect : ProxyWebSocket disconnect");
+        Log.debug("disconnect : ProxyWebSocket disconnect");
 
         try {
             if (wsSession != null && wsSession.isOpen())

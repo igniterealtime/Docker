@@ -1,37 +1,17 @@
-/**
- * $RCSfile$
- * $Revision: $
- * $Date: $
- *
- * Copyright (C) 2005-2008 Jive Software. All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.ifsoft.websockets;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.*;
-
-import java.util.concurrent.*;
+import javax.xml.bind.DatatypeConverter;
 
 import java.io.*;
 import java.net.*;
 import java.security.*;
 import java.security.cert.X509Certificate;
 import java.util.*;
+import java.util.concurrent.*;
 import javax.net.*;
 import javax.net.ssl.*;
 import javax.security.auth.callback.*;
@@ -50,6 +30,11 @@ import org.eclipse.jetty.websocket.api.annotations.WebSocket;
 import org.jivesoftware.util.JiveGlobals;
 import org.jivesoftware.openfire.XMPPServer;
 
+import net.sf.json.*;
+import org.dom4j.Element;
+import org.xmpp.packet.*;
+
+
 public class ProxyConnection
 {
     private static Logger Log = LoggerFactory.getLogger( "ProxyConnection" );
@@ -59,6 +44,8 @@ public class ProxyConnection
     private WebSocketClient client = null;
     private ProxySocket proxySocket = null;
     private String subprotocol = null;
+    private boolean archiveMetaData = false;
+    private boolean archiveChat = false;
 
     public ProxyConnection(URI uri, String subprotocol, int connectTimeout)
     {
@@ -68,11 +55,14 @@ public class ProxyConnection
 
         SslContextFactory sec = new SslContextFactory();
 
+        archiveMetaData = JiveGlobals.getBooleanProperty("docker.docserver.archive.metadata", false);
+        archiveChat = JiveGlobals.getBooleanProperty("docker.docserver.archive.chat", true);
+
         if("wss".equals(uri.getScheme()))
         {
             sec.setValidateCerts(false);
 
-            Log.info("ProxyConnection - SSL");
+            Log.debug("ProxyConnection - SSL");
             getSSLContext();
             isSecure = true;
         }
@@ -87,7 +77,7 @@ public class ProxyConnection
             if (subprotocol != null) request.setSubProtocols(subprotocol);
             client.connect(proxySocket, uri, request);
 
-            Log.info("Connecting to : " + uri);
+            Log.debug("Connecting to : " + uri);
         }
         catch (Exception e)
         {
@@ -114,32 +104,37 @@ public class ProxyConnection
 
     public void deliver(String text)
     {
-        Log.info("ProxyConnection - deliver " + text);
+        Log.debug("ProxyConnection - deliver \n" + text);
 
-        String sendText = text;
+        int pos = text.indexOf("[");
+
+        if (pos > -1 && (archiveMetaData || archiveChat))     // docServer JSON payload
+        {
+            handleDocServerStream(text.substring(pos));
+        }
 
         if (proxySocket != null)
         {
-            proxySocket.deliver(sendText);
+            proxySocket.deliver(text);
         }
     }
 
     public void disconnect()
     {
-        Log.info("ProxyConnection - disconnect");
+        Log.debug("ProxyConnection - disconnect");
         if (proxySocket != null) proxySocket.disconnect();
     }
 
     public void onClose(int code, String reason)
     {
-        Log.info("ProxyConnection - onClose " + reason + " " + code);
+        Log.debug("ProxyConnection - onClose " + reason + " " + code);
         connected = false;
 
         if (this.socket != null) this.socket.disconnect();
     }
 
     public void onMessage(String text) {
-        Log.info("ProxyConnection - onMessage " + text);
+        Log.debug("ProxyConnection - onMessage \n" + text);
 
         try {
             this.socket.deliver(text);
@@ -167,7 +162,7 @@ public class ProxyConnection
         SSLContext sc = null;
 
         try {
-            Log.info("ProxyConnection SSL truster");
+            Log.debug("ProxyConnection SSL truster");
 
             TrustManager[] trustAllCerts = new TrustManager[]
             {
@@ -204,6 +199,65 @@ public class ProxyConnection
         return sc;
     }
 
+    private void handleDocServerStream(String msg)
+    {
+        try {
+            JSONArray jsonA = new JSONArray(msg);
+
+            for (int i = 0; i < jsonA.length(); i++)
+            {
+                JSONObject json = new JSONObject(jsonA.getString(i));
+
+                Log.debug("ProxySocket onMessage: " + json);
+
+                if (json.has("docid") && json.has("openCmd") && archiveMetaData)
+                {
+                    String docId = json.getString("docid");
+                    JSONObject openCmd = json.getJSONObject("openCmd");
+
+                    JSONObject userJson = new JSONObject(new String(DatatypeConverter.parseBase64Binary(openCmd.getString("userid"))));
+                    sendMessage(userJson, "opens " + openCmd.getString("url"));
+                }
+                else
+
+                if (json.has("messages") && archiveChat && "message".equals(json.getString("type")))
+                {
+                    JSONArray messages = json.getJSONArray("messages");
+
+                    if (messages.length() == 1) // multiple messages are history, ignore
+                    {
+                        JSONObject message = messages.getJSONObject(0);
+
+                        String docId = message.getString("docid");
+                        String msgText = message.getString("message");
+                        String time = message.getString("time");
+                        String useridOriginal = message.getString("useridoriginal");
+                        String username = message.getString("username");
+
+                        JSONObject userJson = new JSONObject(new String(DatatypeConverter.parseBase64Binary(useridOriginal)));
+                        sendMessage(userJson, msgText);
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            Log.error("handleDocServerStream", e);
+        }
+    }
+
+    private void sendMessage(JSONObject userJson, String msgText)
+    {
+        Log.debug("sendMessage " + userJson + "\n" + msgText);
+
+        Message message = new Message();
+        message.setTo(userJson.getString("to"));
+        message.setFrom(userJson.getString("from"));
+        message.setType(userJson.getString("type").equals("chat") ? Message.Type.chat : Message.Type.groupchat);
+        message.setBody(msgText);
+
+        XMPPServer.getInstance().getMessageRouter().route(message);
+    }
+
     @WebSocket(maxTextMessageSize = 64 * 1024) public class ProxySocket
     {
         private Session session;
@@ -230,14 +284,14 @@ public class ProxyConnection
 
         @OnWebSocketClose public void onClose(int statusCode, String reason)
         {
-            Log.info("ProxySocket onClose " + statusCode + " " + reason);
+            Log.debug("ProxySocket onClose " + statusCode + " " + reason);
             this.session = null;
             if (proxyConnection != null) proxyConnection.onClose(statusCode, reason);
         }
 
         @OnWebSocketConnect public void onConnect(Session session)
         {
-            Log.info("ProxySocket onConnect: " + session);
+            Log.debug("ProxySocket onConnect: " + session);
             this.session = session;
 
             if (lastMessage != null) deliver(lastMessage);
@@ -245,9 +299,16 @@ public class ProxyConnection
 
         @OnWebSocketMessage public void onMessage(String msg)
         {
-            msg = msg.replace("http://" + ipaddr + ":" + docserverPort, docserverUrl);
+            Log.debug("ProxySocket onMessage \n" + msg);
 
-            Log.info("ProxySocket onMessage \n" + msg);
+            int pos = msg.indexOf("[");
+
+            if (pos > -1 && (archiveMetaData || archiveChat))     // docServer JSON payload
+            {
+                handleDocServerStream(msg.substring(pos));
+            }
+
+            msg = msg.replace("http://" + ipaddr + ":" + docserverPort, docserverUrl);
             if (proxyConnection != null) proxyConnection.onMessage(msg);
         }
 
@@ -256,7 +317,7 @@ public class ProxyConnection
             if (session != null)
             {
                 try {
-                    Log.info("ProxySocket deliver: \n" + text);
+                    Log.debug("ProxySocket deliver: \n" + text);
                     session.getRemote().sendStringByFuture(text);
                     lastMessage = null;
                 } catch (Exception e) {
@@ -269,5 +330,6 @@ public class ProxyConnection
         {
             if (session != null) session.close(StatusCode.NORMAL,"I'm done");
         }
+
     }
 }

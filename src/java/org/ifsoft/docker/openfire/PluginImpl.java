@@ -32,7 +32,6 @@ import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.proxy.ProxyServlet;
 import org.eclipse.jetty.servlets.*;
 import org.eclipse.jetty.servlet.*;
-import org.eclipse.jetty.webapp.WebAppContext;
 import org.eclipse.jetty.websocket.servlet.*;
 import org.eclipse.jetty.websocket.server.*;
 import org.eclipse.jetty.websocket.server.pathmap.ServletPathSpec;
@@ -62,7 +61,6 @@ public class PluginImpl implements Plugin, PropertyEventListener
     private ServletContextHandler dockerContext = null;
     private ServletContextHandler docserverContext = null;
     private ServletContextHandler docserverContext2 = null;
-    private WebAppContext docappContext;
     private DockerClient dockerClient;
     private String portainerId = null;
 
@@ -76,7 +74,6 @@ public class PluginImpl implements Plugin, PropertyEventListener
             if (dockerContext != null) HttpBindManager.getInstance().removeJettyHandler(dockerContext);
             if (docserverContext != null) HttpBindManager.getInstance().removeJettyHandler(docserverContext);
             if (docserverContext2 != null) HttpBindManager.getInstance().removeJettyHandler(docserverContext2);
-            if (docappContext != null) HttpBindManager.getInstance().removeJettyHandler(docappContext);
         }
         catch (Exception e) {
             //Log.error("Docker destroyPlugin ", e);
@@ -128,7 +125,6 @@ public class PluginImpl implements Plugin, PropertyEventListener
             }
 
             addDockerProxy();
-            addDocServerApp(pluginDirectory);
             addDocServerProxy();
 
         } else {
@@ -150,61 +146,13 @@ public class PluginImpl implements Plugin, PropertyEventListener
         return ourIpAddress;
     }
 
-    private void addDocServerApp(File pluginDirectory)
-    {
-        Log.info("Initialize DocServerApp");
-
-/*
-        Path settingsProperties = Paths.get(pluginDirectory.getPath() + "/classes/docapp/WEB-INF/classes/settings.properties");
-
-        String ipaddr = JiveGlobals.getProperty("docker.ipaddr", XMPPServer.getInstance().getServerInfo().getHostname());
-        String httpPort = JiveGlobals.getProperty("httpbind.port.plain", "7070");
-        String docserverUrl = JiveGlobals.getProperty("docker.docserver.url", "http://" + ipaddr + ":" + httpPort);
-
-        List<String> lines = Arrays.asList(
-                                            "# docapp properties",
-                                            "filesize-max=5242880",
-                                            "storage-folder=app_data",
-                                            "files.docservice.viewed-docs=.pdf|.djvu|.xps",
-                                            "files.docservice.edited-docs=.docx|.xlsx|.csv|.pptx|.ppsx|.txt",
-                                            "files.docservice.convert-docs=.docm|.dotx|.dotm|.dot|.doc|.odt|.fodt|.ott|.xlsm|.xltx|.xltm|.xlt|.xls|.ods|.fods|.ots|.pptm|.ppt|.ppsm|.pps|.potx|.potm|.pot|.odp|.fodp|.otp|.rtf|.mht|.html|.htm|.epub",
-                                            "files.docservice.timeout=120000",
-                                            "files.docservice.url.converter=" + docserverUrl + "/v5.2.2-2/ConvertService.ashx",
-                                            "files.docservice.url.tempstorage=" + docserverUrl + "/v5.2.2-2/ResourceService.ashx",
-                                            "files.docservice.url.api=" + docserverUrl + "/v5.2.2-2/web-apps/apps/api/documents/api.js",
-                                            "files.docservice.url.preloader=" + docserverUrl + "/v5.2.2-2/web-apps/apps/api/documents/cache-scripts.html"
-                                          );
-
-        try {
-            Files.write(settingsProperties, lines, Charset.forName("UTF-8"));
-        } catch (Exception e) {
-            Log.error("addDocServerApp write settings.properties fail", e);
-        }
-*/
-        docappContext = new WebAppContext(null, pluginDirectory.getPath() + "/classes/docapp", "/docapp");
-
-        if ( JiveGlobals.getBooleanProperty("docker.security.enabled", false ) )
-        {
-            Log.info("Initialize Docker WebService security");
-            SecurityHandler securityHandler5 = basicAuth("docker");
-            if (securityHandler5 != null) docappContext.setSecurityHandler(securityHandler5);
-        }
-
-        final List<ContainerInitializer> initializers6 = new ArrayList<>();
-        initializers6.add(new ContainerInitializer(new JettyJasperInitializer(), null));
-        docappContext.setAttribute("org.eclipse.jetty.containerInitializers", initializers6);
-        docappContext.setAttribute(InstanceManager.class.getName(), new SimpleInstanceManager());
-        docappContext.setWelcomeFiles(new String[]{"index.jsp"});
-        HttpBindManager.getInstance().addJettyHandler(docappContext);
-    }
-
     private void addDocServerProxy()
     {
         String version = JiveGlobals.getProperty("docker.docserver.version", "v5.2.2-2");
         String ipaddr = JiveGlobals.getProperty("docker.ipaddr", getIpAddress());
         String docserverPort = JiveGlobals.getProperty("docker.docserver.port", "32771");
 
-        Log.info("Initialize DocServerProxy http://" + ipaddr + ":" + docserverPort + "/" + version);
+        Log.info("Initialize ONLYOFFICE DocServer HTTP & WebSocket Proxy http://" + ipaddr + ":" + docserverPort + "/" + version);
 
         docserverContext = new ServletContextHandler(null, "/" + version, ServletContextHandler.SESSIONS);
 
@@ -268,7 +216,7 @@ public class PluginImpl implements Plugin, PropertyEventListener
 
             if (query != null) path += "?" + query;
 
-            Log.info("Initialize DockerProxy " + path + " " + query);
+            Log.info("DockerSocketCreator " + path + " " + query);
 
             String url = "ws://" + ipaddr + ":" + docserverPort + path;
 
@@ -280,29 +228,6 @@ public class PluginImpl implements Plugin, PropertyEventListener
             if (protocol != null) resp.setAcceptedSubProtocol(protocol);
             return socket;
         }
-    }
-
-    private static final SecurityHandler basicAuth(String realm) {
-
-        OpenfireLoginService l = new OpenfireLoginService();
-        l.setName(realm);
-
-        Constraint constraint = new Constraint();
-        constraint.setName(Constraint.__BASIC_AUTH);
-        constraint.setRoles(new String[]{"docker", "webapp-owner", "webapp-contributor", "warfile-admin"});
-        constraint.setAuthenticate(true);
-
-        ConstraintMapping cm = new ConstraintMapping();
-        cm.setConstraint(constraint);
-        cm.setPathSpec("/*");
-
-        ConstraintSecurityHandler csh = new ConstraintSecurityHandler();
-        csh.setAuthenticator(new BasicAuthenticator());
-        csh.setRealmName(realm);
-        csh.addConstraintMapping(cm);
-        csh.setLoginService(l);
-
-        return csh;
     }
 
     //-------------------------------------------------------
