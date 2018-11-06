@@ -21,8 +21,8 @@
     {                               
         String dockerEnabled = request.getParameter("dockerEnabled");
         JiveGlobals.setProperty("docker.enabled", (dockerEnabled != null && dockerEnabled.equals("on")) ? "true": "false");  
-        JiveGlobals.setProperty("docker.ipaddr", request.getParameter("dockerIpAddr")); 
         
+        JiveGlobals.setProperty("docker.ipaddr", request.getParameter("dockerIpAddr"));         
         JiveGlobals.setProperty("docker.docserver.port", request.getParameter("docserverPort"));         
         JiveGlobals.setProperty("docker.docserver.url", request.getParameter("docserverUrl"));    
         
@@ -31,6 +31,9 @@
 
         String archiveChat = request.getParameter("archiveChat");
         JiveGlobals.setProperty("docker.docserver.archive.chat", (archiveChat != null && archiveChat.equals("on")) ? "true": "false");  
+
+        String proxyAdmin = request.getParameter("proxyAdmin");
+        JiveGlobals.setProperty("docker.proxy.admin", (proxyAdmin != null && proxyAdmin.equals("on")) ? "true": "false");  
         
     }
 
@@ -65,6 +68,12 @@
                     <fmt:message key="config.page.configuration.enabled" />       
                 </td>  
             </tr>  
+            <tr>
+                <td nowrap  colspan="2">
+                    <input type="checkbox" name="proxyAdmin"<%= JiveGlobals.getBooleanProperty("docker.proxy.admin", true) ? " checked" : "" %>>
+                    <fmt:message key="config.page.configuration.proxy.admin" />       
+                </td>  
+            </tr>            
             <tr>
             <td align="left" width="150">
                 <fmt:message key="settings.docker.ipaddr"/>

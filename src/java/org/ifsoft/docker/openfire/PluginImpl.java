@@ -53,6 +53,7 @@ import com.github.dockerjava.api.model.*;
 
 import org.jitsi.util.OSUtils;
 import org.ifsoft.websockets.*;
+import org.jivesoftware.admin.AuthCheckFilter;
 
 public class PluginImpl implements Plugin, PropertyEventListener
 {
@@ -68,6 +69,7 @@ public class PluginImpl implements Plugin, PropertyEventListener
     public void destroyPlugin()
     {
         PropertyEventDispatcher.removeListener(this);
+        AuthCheckFilter.removeExclude("docker/portainer.jsp");
 
         try {
             if (portainerId != null) dockerClient.stopContainerCmd(portainerId).exec();
@@ -83,9 +85,9 @@ public class PluginImpl implements Plugin, PropertyEventListener
     public void initializePlugin(final PluginManager manager, final File pluginDirectory)
     {
         PropertyEventDispatcher.addListener(this);
-        boolean dockerEnabled = JiveGlobals.getBooleanProperty("docker.enabled", true);
+        AuthCheckFilter.addExclude("docker/portainer.jsp");
 
-        if (dockerEnabled)
+        if (JiveGlobals.getBooleanProperty("docker.enabled", true))
         {
             dockerClient = DockerClientBuilder.getInstance("tcp://localhost:2375").build();
 
