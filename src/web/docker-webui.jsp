@@ -17,7 +17,7 @@
     String port = JiveGlobals.getBooleanProperty("docker.portainer.secure", false) ? JiveGlobals.getProperty("httpbind.port.secure", "7443") : JiveGlobals.getProperty("httpbind.port.plain", "7070");
     String protocol = JiveGlobals.getBooleanProperty("docker.portainer.secure", false) ? "https://" : "http://";
     
-    String url = protocol + hostname + ":" + port + "/docker";   
+    String url = protocol + hostname + ":" + port + "/portainer";   
 %>
 
 <html>

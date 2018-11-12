@@ -60,6 +60,7 @@ public class PluginImpl implements Plugin, PropertyEventListener
     private static final Logger Log = LoggerFactory.getLogger(PluginImpl.class);
 
     private ServletContextHandler dockerContext = null;
+    private ServletContextHandler portainerContext = null;
     private ServletContextHandler docserverContext = null;
     private ServletContextHandler docserverContext2 = null;
     private DockerClient dockerClient;
@@ -69,11 +70,12 @@ public class PluginImpl implements Plugin, PropertyEventListener
     public void destroyPlugin()
     {
         PropertyEventDispatcher.removeListener(this);
-        AuthCheckFilter.removeExclude("docker/portainer.jsp");
+        //AuthCheckFilter.removeExclude("docker/portainer.jsp");
 
         try {
             if (portainerId != null) dockerClient.stopContainerCmd(portainerId).exec();
             if (dockerContext != null) HttpBindManager.getInstance().removeJettyHandler(dockerContext);
+            if (portainerContext != null) HttpBindManager.getInstance().removeJettyHandler(portainerContext);
             if (docserverContext != null) HttpBindManager.getInstance().removeJettyHandler(docserverContext);
             if (docserverContext2 != null) HttpBindManager.getInstance().removeJettyHandler(docserverContext2);
         }
@@ -85,7 +87,7 @@ public class PluginImpl implements Plugin, PropertyEventListener
     public void initializePlugin(final PluginManager manager, final File pluginDirectory)
     {
         PropertyEventDispatcher.addListener(this);
-        AuthCheckFilter.addExclude("docker/portainer.jsp");
+        //AuthCheckFilter.addExclude("docker/portainer.jsp");
 
         if (JiveGlobals.getBooleanProperty("docker.enabled", true))
         {
@@ -126,7 +128,8 @@ public class PluginImpl implements Plugin, PropertyEventListener
                 Log.error("initializePlugin", e);
             }
 
-            addDockerProxy();
+            addDockerRestProxy();
+            addPortainerProxy();
             addDocServerProxy();
 
         } else {
@@ -184,18 +187,31 @@ public class PluginImpl implements Plugin, PropertyEventListener
         HttpBindManager.getInstance().addJettyHandler(docserverContext2);
     }
 
-    private void addDockerProxy()
+    private void addDockerRestProxy()
     {
-        Log.info("Initialize DockerProxy");
+        Log.info("Initialize Docker REST Proxy");
 
-        dockerContext = new ServletContextHandler(null, "/docker", ServletContextHandler.SESSIONS);
-        String ipaddr = JiveGlobals.getProperty("docker.ipaddr", getIpAddress());
+        dockerContext = new ServletContextHandler(null, "/dockerapi", ServletContextHandler.SESSIONS);
         ServletHolder proxyServlet = new ServletHolder(ProxyServlet.Transparent.class);
-        proxyServlet.setInitParameter("proxyTo", "http://" + ipaddr + ":9000");
+        proxyServlet.setInitParameter("proxyTo", "http://127.0.0.1:2375/");
         proxyServlet.setInitParameter("prefix", "/");
         dockerContext.addServlet(proxyServlet, "/*");
 
         HttpBindManager.getInstance().addJettyHandler(dockerContext);
+    }
+
+    private void addPortainerProxy()
+    {
+        Log.info("Initialize Portainer");
+
+        portainerContext = new ServletContextHandler(null, "/portainer", ServletContextHandler.SESSIONS);
+        String ipaddr = JiveGlobals.getProperty("docker.ipaddr", getIpAddress());
+        ServletHolder proxyServlet = new ServletHolder(ProxyServlet.Transparent.class);
+        proxyServlet.setInitParameter("proxyTo", "http://" + ipaddr + ":9000");
+        proxyServlet.setInitParameter("prefix", "/");
+        portainerContext.addServlet(proxyServlet, "/*");
+
+        HttpBindManager.getInstance().addJettyHandler(portainerContext);
     }
 
     public static class DockerSocketCreator implements WebSocketCreator
