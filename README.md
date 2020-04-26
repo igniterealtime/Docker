@@ -9,10 +9,10 @@ This plugin enables Openfire to act as a super container to Docker by providing 
 
 <img src="https://github.com/igniterealtime/Docker/blob/master/docs/docker_screen_1.png" />
 
-The plugin was created to run ONLYOFFICE Document Server as a docker instance in order to support [collaborative document editiing](https://helpcenter.onlyoffice.com/guides/collaborative-editing.aspx) from [Pade](https://github.com/igniterealtime/Pade).
+The plugin was created to run ONLYOFFICE Document Server as a Docker instance in order to support [collaborative document editiing](https://helpcenter.onlyoffice.com/guides/collaborative-editing.aspx) from [Pade](https://github.com/igniterealtime/Pade).
 
 <img src="https://github.com/igniterealtime/Docker/blob/master/docs/docker_screen_2.png" />
 
-The plugin can also be used in theeory to provide a hosted multi-tenancy Openfire solution by running each domain as a Docker instance
+The plugin can also be used in theory to provide a hosted multi-tenancy Openfire solution by running each domain as a Docker instance.
 
 
